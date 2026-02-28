@@ -1,0 +1,15 @@
+name: VillagerReset
+main: dev.cevapi.villagerreset.paper.VillagerResetPaperPlugin
+version: v1.0.0
+api-version: '1.21'
+authors: [CevAPI]
+commands:
+  villagerreset:
+    description: Admin commands for VillagerReset
+    usage: /villagerreset <status|list|set|enable|disable|reload|debug>
+    aliases: [vr]
+    permission: villagerreset.admin
+permissions:
+  villagerreset.admin:
+    description: Allows managing VillagerReset settings
+    default: op

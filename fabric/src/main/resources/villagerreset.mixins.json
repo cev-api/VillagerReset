@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "dev.cevapi.villagerreset.fabric.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "VillagerMixin",
+    "ZombieVillagerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

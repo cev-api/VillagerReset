@@ -1,0 +1,13 @@
+enabled: true
+debug: false
+cycle-cost-emeralds: 1
+profession-swap-cost-emeralds: 2
+unemployed-initial-profession:
+  enabled: true
+  cost-emeralds: 10
+cycle-max-uses: 8
+profession-swap-success-chance: 1.0
+cure-discount:
+  enabled: true
+  radius-blocks: 500
+  bonus-level: 20

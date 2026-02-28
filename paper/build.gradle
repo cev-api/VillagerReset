@@ -1,0 +1,10 @@
+dependencies {
+    implementation project(':common')
+    compileOnly 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
+}
+
+tasks.jar {
+    archiveBaseName.set('VillageReset')
+    archiveClassifier.set('Paper')
+    from(project(':common').sourceSets.main.output)
+}
