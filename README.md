@@ -15,7 +15,7 @@ VillagerReset is a dual-platform Minecraft server project that provides villager
 - `Profession Swap` option (head icon): swaps to a random profession for emerald cost/chance.
 - Special options are virtual actions (no barrier/head item goes to player inventory).
 - Configurable max special uses before sold out; restocks like normal villager offers.
-- Optional unemployed handling: pay a higher first-time cost to assign profession.
+- Optional unemployed handling: pay a higher first-time cost to assign profession. **(Paper only)**
 - Optional cure discount spread to villagers in configurable radius.
 - OP/admin command for runtime config edits, status listing, enable/disable, and debug mode.
 
@@ -35,12 +35,13 @@ Permission: `villagerreset.admin` (default: op)
 
 ## Example Config
 
-```
+```yaml
+# Paper (plugin.yml config)
 enabled: true
 debug: false
 cycle-cost-emeralds: 1
 profession-swap-cost-emeralds: 2
-unemployed-initial-profession:
+unemployed-initial-profession:   # Paper only — ignored on Fabric
   enabled: true
   cost-emeralds: 10
 cycle-max-uses: 8

@@ -8,7 +8,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.World;
+import org.bukkit.Registry;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Villager;
@@ -24,7 +24,6 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.entity.VillagerReplenishTradeEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.Merchant;
 import org.bukkit.inventory.MerchantInventory;
 import org.bukkit.inventory.MerchantRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -32,14 +31,11 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
+@SuppressWarnings("deprecation")
 public final class VillagerTradeListener implements Listener {
     private final VillagerResetPaperPlugin plugin;
     private final NamespacedKey lockedKey;
@@ -50,7 +46,6 @@ public final class VillagerTradeListener implements Listener {
     private final NamespacedKey professionUsesKey;
     private final NamespacedKey offeredProfessionKey;
     private final NamespacedKey forcedProfessionKey;
-    private final Map<UUID, UUID> unemployedSessions;
 
     public VillagerTradeListener(VillagerResetPaperPlugin plugin) {
         this.plugin = plugin;
@@ -62,7 +57,6 @@ public final class VillagerTradeListener implements Listener {
         this.professionUsesKey = new NamespacedKey(plugin, "profession_uses");
         this.offeredProfessionKey = new NamespacedKey(plugin, "offered_profession");
         this.forcedProfessionKey = new NamespacedKey(plugin, "forced_profession");
-        this.unemployedSessions = new ConcurrentHashMap<>();
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -93,7 +87,7 @@ public final class VillagerTradeListener implements Listener {
             debug("Opening merchant player=" + player.getName() + " villager=" + villager.getUniqueId()
                     + " recipes=" + villager.getRecipes().size());
             if (plugin.resetConfig().unemployedInitialProfessionEnabled && villager.getProfession() == Villager.Profession.NONE) {
-                openUnemployedMerchant(player, villager);
+                player.openMerchant(villager, true);
                 return;
             }
             player.openMerchant(villager, true);
@@ -111,23 +105,8 @@ public final class VillagerTradeListener implements Listener {
         if (!(event.getView().getTopInventory() instanceof MerchantInventory merchantInventory)) {
             return;
         }
-        boolean customMerchantSession = false;
-        Villager villager;
-        if (merchantInventory.getHolder() instanceof Villager holderVillager) {
-            villager = holderVillager;
-        } else {
-            customMerchantSession = true;
-            UUID villagerId = unemployedSessions.get(player.getUniqueId());
-            if (villagerId == null) {
-                debug("Purchase ignored: custom merchant without session player=" + player.getName());
-                return;
-            }
-            Villager resolved = findVillager(villagerId);
-            if (resolved == null || !resolved.isValid()) {
-                debug("Purchase ignored: session villager missing player=" + player.getName() + " villager=" + villagerId);
-                return;
-            }
-            villager = resolved;
+        if (!(merchantInventory.getHolder() instanceof Villager villager)) {
+            return;
         }
         if (event.getRawSlot() != 2) {
             return;
@@ -149,13 +128,6 @@ public final class VillagerTradeListener implements Listener {
                         + " result=" + selectedRecipe.getResult().getType());
                 handleSpecialPurchase(player, villager, merchantInventory, selectedRecipe);
             });
-            return;
-        }
-
-        if (customMerchantSession) {
-            event.setCancelled(true);
-            debug("Blocked non-special purchase in custom unemployed merchant player=" + player.getName()
-                    + " villager=" + villager.getUniqueId());
             return;
         }
 
@@ -244,7 +216,7 @@ public final class VillagerTradeListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onMerchantClose(InventoryCloseEvent event) {
         if (event.getPlayer() instanceof Player player) {
-            unemployedSessions.remove(player.getUniqueId());
+            removeSpecialItemsFromPlayer(player);
         }
     }
 
@@ -309,10 +281,10 @@ public final class VillagerTradeListener implements Listener {
 
         ItemStack result = new ItemStack(Material.PLAYER_HEAD);
         ItemMeta meta = result.getItemMeta();
-        meta.displayName(Component.text(professionLabel(profession)));
+        meta.displayName(Component.text("Change Profession"));
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
         pdc.set(professionOfferKey, PersistentDataType.BYTE, (byte) 1);
-        pdc.set(targetProfessionKey, PersistentDataType.STRING, profession.name());
+        pdc.set(targetProfessionKey, PersistentDataType.STRING, profession.getKey().toString());
         result.setItemMeta(meta);
 
         MerchantRecipe recipe = new MerchantRecipe(result, cfg.cycleMaxUses);
@@ -333,7 +305,7 @@ public final class VillagerTradeListener implements Listener {
         villager.setProfession(target);
         villager.setVillagerLevel(1);
         villager.setVillagerExperience(0);
-        villager.getPersistentDataContainer().set(forcedProfessionKey, PersistentDataType.STRING, target.name());
+        villager.getPersistentDataContainer().set(forcedProfessionKey, PersistentDataType.STRING, target.getKey().toString());
         debug("Profession applied villager=" + villager.getUniqueId() + " profession=" + villager.getProfession());
         return true;
     }
@@ -376,10 +348,11 @@ public final class VillagerTradeListener implements Listener {
     }
 
     private Villager.Profession pickRandomProfession(Villager.Profession current) {
-        List<Villager.Profession> professions = new ArrayList<>(Arrays.stream(Villager.Profession.values())
+        List<Villager.Profession> professions = new ArrayList<>();
+        Registry.VILLAGER_PROFESSION.stream()
                 .filter(p -> p != Villager.Profession.NONE && p != Villager.Profession.NITWIT)
-                .toList());
-        professions.remove(current);
+                .filter(p -> p != current)
+                .forEach(professions::add);
         if (professions.isEmpty()) {
             return current;
         }
@@ -387,7 +360,7 @@ public final class VillagerTradeListener implements Listener {
     }
 
     private String professionLabel(Villager.Profession profession) {
-        String lower = profession.name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        String lower = profession.getKey().getKey().replace('_', ' ');
         String[] parts = lower.split(" ");
         StringBuilder out = new StringBuilder();
         for (String part : parts) {
@@ -455,11 +428,7 @@ public final class VillagerTradeListener implements Listener {
         }
 
         ensureRecyclerOffers(villager);
-        if (plugin.resetConfig().unemployedInitialProfessionEnabled && villager.getProfession() == Villager.Profession.NONE) {
-            openUnemployedMerchant(player, villager);
-        } else {
-            refreshMerchantWindow(player, villager);
-        }
+        refreshMerchantWindow(player, villager);
     }
 
     private boolean hasRequiredIngredients(MerchantInventory merchantInventory, MerchantRecipe recipe) {
@@ -547,14 +516,15 @@ public final class VillagerTradeListener implements Listener {
             return null;
         }
         try {
-            return Villager.Profession.valueOf(raw);
-        } catch (IllegalArgumentException ignored) {
+            NamespacedKey key = NamespacedKey.fromString(raw);
+            return key == null ? null : Registry.VILLAGER_PROFESSION.get(key);
+        } catch (IllegalArgumentException | NullPointerException ignored) {
             return null;
         }
     }
 
     private void setOfferedProfession(Villager villager, Villager.Profession profession) {
-        villager.getPersistentDataContainer().set(offeredProfessionKey, PersistentDataType.STRING, profession.name());
+        villager.getPersistentDataContainer().set(offeredProfessionKey, PersistentDataType.STRING, profession.getKey().toString());
     }
 
     private int professionSwapCostFor(Villager villager) {
@@ -565,36 +535,20 @@ public final class VillagerTradeListener implements Listener {
         return cfg.professionSwapCostEmeralds;
     }
 
-    private void openUnemployedMerchant(Player player, Villager villager) {
-        Merchant merchant = Bukkit.createMerchant(Component.text("VillagerReset"));
-        List<MerchantRecipe> specials = new ArrayList<>();
-        for (MerchantRecipe recipe : villager.getRecipes()) {
-            if (isRecyclerRecipe(recipe)) {
-                specials.add(recipe);
-            }
-        }
-        merchant.setRecipes(specials);
-        unemployedSessions.put(player.getUniqueId(), villager.getUniqueId());
-        boolean opened = player.openMerchant(merchant, true) != null;
-        debug("Open unemployed custom merchant player=" + player.getName()
-                + " villager=" + villager.getUniqueId()
-                + " offers=" + specials.size()
-                + " opened=" + opened);
-    }
-
-    private Villager findVillager(UUID uuid) {
-        for (World world : Bukkit.getWorlds()) {
-            Entity entity = world.getEntity(uuid);
-            if (entity instanceof Villager villager) {
-                return villager;
-            }
-        }
-        return null;
-    }
-
     private void debug(String message) {
         if (plugin.resetConfig().debug) {
             plugin.getLogger().info("[VR-DEBUG] " + message);
+        }
+    }
+
+    private void removeSpecialItemsFromPlayer(Player player) {
+        org.bukkit.inventory.PlayerInventory inv = player.getInventory();
+        for (int i = 0; i < inv.getSize(); i++) {
+            ItemStack item = inv.getItem(i);
+            if (item != null && (hasMarker(item, recycleOfferKey) || hasMarker(item, professionOfferKey))) {
+                inv.setItem(i, null);
+                debug("Cleaned leaked special item player=" + player.getName() + " slot=" + i);
+            }
         }
     }
 }

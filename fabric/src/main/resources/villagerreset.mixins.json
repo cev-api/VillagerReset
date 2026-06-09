@@ -3,7 +3,11 @@
   "package": "dev.cevapi.villagerreset.fabric.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "VillagerAccessor",
+    "MobInteractMixin",
     "VillagerMixin",
+    "VillagerRestockMixin",
+    "VillagerStartTradingMixin",
     "ZombieVillagerMixin"
   ],
   "injectors": {

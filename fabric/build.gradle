@@ -13,6 +13,7 @@ dependencies {
 
 loom {
     mixin {
+        useLegacyMixinAp = true
         defaultRefmapName = 'villagerreset.refmap.json'
     }
 }

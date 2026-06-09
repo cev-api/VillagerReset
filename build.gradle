@@ -4,7 +4,7 @@ plugins {
 
 allprojects {
     group = 'dev.cevapi.villagerreset'
-    version = 'v1.0.0'
+    version = 'v1.0.1'
 
     repositories {
         mavenCentral()
